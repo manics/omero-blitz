@@ -39,6 +39,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.commons.lang.StringUtils;
 
 import ome.util.Utils;
 import ome.util.checksum.ChecksumProviderFactory;
@@ -376,9 +377,26 @@ public class client {
         optionallySetProperty(id, "Ice.Default.EndpointSelection", "Ordered");
         optionallySetProperty(id, "Ice.Default.PreferSecure", "1");
         optionallySetProperty(id, "Ice.Plugin.IceSSL", "IceSSL.PluginFactory");
-        optionallySetProperty(id, "IceSSL.Protocols", "tls1");
-        optionallySetProperty(id, "IceSSL.Ciphers", "NONE (DH_anon.*AES)");
-        optionallySetProperty(id, "IceSSL.VerifyPeer", "0");
+
+        if (System.getenv("OMERO_SSL_NO_VERIFY") == "1") {
+            optionallySetProperty(id, "IceSSL.Protocols", "tls1");
+            optionallySetProperty(id, "IceSSL.Ciphers", "NONE (DH_anon.*AES)");
+            optionallySetProperty(id, "IceSSL.VerifyPeer", "0");
+        } else {
+            // TODO: Can't use "HIGH":
+            // Ice.SecurityException: java.lang.IllegalArgumentException:
+            // Unsupported ciphersuite HIGH
+            optionallySetProperty(id, "IceSSL.Ciphers", "ALL");
+            optionallySetProperty(id, "IceSSL.VerifyPeer", "1");
+            optionallySetProperty(id, "IceSSL.Protocols", "tls1_2");
+            String capath = System.getenv("OMERO_SSL_CA");
+            if (!StringUtils.isEmpty(capath)) {
+                optionallySetProperty(id, "IceSSL.CAs", capath);
+            } else {
+                optionallySetProperty(id, "IceSSL.UsePlatformCAs", "1");
+            }
+        }
+
         optionallySetProperty(id, "omero.block_size", Integer
             .toString(omero.constants.DEFAULTBLOCKSIZE.value));
 
@@ -412,6 +430,20 @@ public class client {
         router = router.replaceAll("@omero.port@", port);
         router = router.replaceAll("@omero.host@", host);
         id.properties.setProperty("Ice.Default.Router", router);
+
+        // Verify certificate against hostname and equivalent wildcard
+        host = id.properties.getPropertyWithDefault(
+            "omero.host", id.properties.getPropertyWithDefault(
+                "omero.url.host", ""));
+        if (!StringUtils.isEmpty(host) &&
+                (System.getenv("OMERO_SSL_NO_VERIFY") != "1")) {
+            String trustonly = "CN=" + host;
+            int firstdot = host.indexOf('.');
+            if (firstdot > -1) {
+                trustonly = trustonly + ";CN=*" + host.substring(firstdot);
+            }
+            optionallySetProperty(id, "IceSSL.TrustOnly", trustonly);
+        }
 
         // Dump properties
         String dump = id.properties.getProperty("omero.dump");
