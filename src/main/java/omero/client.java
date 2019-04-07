@@ -389,9 +389,11 @@ public class client {
             optionallySetProperty(id, "IceSSL.Ciphers", "ALL");
             optionallySetProperty(id, "IceSSL.VerifyPeer", "1");
             optionallySetProperty(id, "IceSSL.Protocols", "tls1_2");
-            String capath = System.getenv("OMERO_SSL_CA");
-            if (!StringUtils.isEmpty(capath)) {
-                optionallySetProperty(id, "IceSSL.CAs", capath);
+            optionallySetProperty(id, "IceSSL.VerifyDepthMax", "0");
+            // Java uses IceSSL.Truststore instead of IceSSL.CAs
+            String truststore = System.getenv("OMERO_SSL_TRUSTSTORE");
+            if (!StringUtils.isEmpty(truststore)) {
+                optionallySetProperty(id, "IceSSL.Truststore", truststore);
             } else {
                 optionallySetProperty(id, "IceSSL.UsePlatformCAs", "1");
             }
